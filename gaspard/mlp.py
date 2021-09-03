@@ -1,9 +1,9 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-
-import matplotlib.pyplot as plt
 
 import utils
 
@@ -50,14 +50,14 @@ def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
     num_train = train_targets.size(0)
 
     epoch = 0
-    while num_epoch_no_improvement < NUM_EPOCH_CONVERGENCE:
+    while num_epoch_no_improvement < num_epoch_convergence:
 
         # Training
         permutation = torch.randperm(num_train)
         train_loss = 0.0
 
-        for i in range(0, num_train, BATCH_SIZE):
-            indices = permutation[i:i+BATCH_SIZE]
+        for i in range(0, num_train, batch_size):
+            indices = permutation[i:i+batch_size]
             batch_inputs = train_inputs[indices, :]
             batch_targets = train_targets[indices, :]
 
@@ -70,7 +70,7 @@ def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
 
             train_loss += loss.item()
 
-        train_loss /= int(num_train / BATCH_SIZE)
+        train_loss /= int(num_train / batch_size)
         train_losses.append(train_loss)
 
         epoch += 1
@@ -117,6 +117,7 @@ def main():
         hidden_size=HIDDEN_SIZE,
         output_size=train_targets.size(1),
         num_hidden=NUM_HIDDEN)
+
     opt = optim.Adam(mlp.parameters(), lr=LEARNING_RATE)
 
     train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
@@ -128,8 +129,12 @@ def main():
     utils.show_sample_sequence(
         test_targets, test_preds, test_seq_lengths, recurrent=False)
 
-    mse_loss = ((test_preds - test_targets) ** 2).sum() / test_preds.shape[0]
-    print('MSE Loss: {:.4f}'.format(mse_loss))
+    mse_loss = F.mse_loss(test_preds, test_targets)
+    print('MSE Loss: {:.4f}'.format(mse_loss.item()))
+
+    os.makedirs('../weights/', exist_ok=True)
+    weights_file = '../weights/mlp-L{}H{}.pth'.format(NUM_HIDDEN, HIDDEN_SIZE)
+    torch.save(mlp.state_dict(), weights_file)
 
 
 if __name__ == '__main__':
