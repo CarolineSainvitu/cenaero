@@ -50,8 +50,8 @@ def load_data(simulation_ids, recurrent=False):
 
         # TODO: delete this
         if recurrent:
-            input = input[::20, :, :]
-            target = target[::20, :, :]
+            input = input[::20, :]
+            target = target[::20, :]
 
         inputs.append(input)
         targets.append(target)
@@ -62,9 +62,7 @@ def load_data(simulation_ids, recurrent=False):
     if recurrent:
         # Pad sequences and stack them to create the dataset
         inputs = nn.utils.rnn.pad_sequence(inputs)
-        outputs = nn.utils.rnn.pad_sequence(inputs)
-        inputs = torch.stack(inputs, dim=1)
-        targets = torch.stack(targets, dim=1)
+        targets = nn.utils.rnn.pad_sequence(targets)
 
     else:
         # Concatenate all sequences to create the dataset
@@ -105,7 +103,7 @@ def show_sample_sequence(targets, preds, seq_lengths, recurrent=False):
 
     if recurrent:
         target = targets[:, sample_id, :]
-        pred = targets[:, sample_id, :]
+        pred = preds[:, sample_id, :]
     else:
         start_indices = seq_lengths.cumsum(dim=0)
         start_sequence = start_indices[sample_id]
