@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -47,27 +48,30 @@ def load_data(simulation_ids, recurrent=False):
                 for i in range(6)],
             dim=1)
 
+        # TODO: delete this
+        if recurrent:
+            input = input[::20, :, :]
+            target = target[::20, :, :]
+
         inputs.append(input)
         targets.append(target)
 
-    if recurrent:
-        # Extract sequences lengths
-        seq_lengths = torch.tensor([len(input) for input in inputs])
+    # Extract sequences lengths
+    seq_lengths = torch.tensor([len(input) for input in inputs])
 
+    if recurrent:
         # Pad sequences and stack them to create the dataset
         inputs = nn.utils.rnn.pad_sequence(inputs)
         outputs = nn.utils.rnn.pad_sequence(inputs)
         inputs = torch.stack(inputs, dim=1)
         targets = torch.stack(targets, dim=1)
 
-        return inputs, targets, seq_lengths
-
     else:
         # Concatenate all sequences to create the dataset
         inputs = torch.cat(inputs, dim=0)
         targets = torch.cat(targets, dim=0)
 
-        return inputs, targets
+    return inputs, targets, seq_lengths
 
 
 def train_valid_test_split(sequence_ids, recurrent=False, train_ratio=0.7,
@@ -92,3 +96,39 @@ def train_valid_test_split(sequence_ids, recurrent=False, train_ratio=0.7,
     test_dataset = load_data(test_ids, recurrent)
 
     return train_dataset, valid_dataset, test_dataset
+
+
+def show_sample_sequence(targets, preds, seq_lengths, recurrent=False):
+
+    num_sequences = seq_lengths.size(0)
+    sample_id = torch.randint(num_sequences, ())
+
+    if recurrent:
+        target = targets[:, sample_id, :]
+        pred = targets[:, sample_id, :]
+    else:
+        start_indices = seq_lengths.cumsum(dim=0)
+        start_sequence = start_indices[sample_id]
+        if sample_id == num_sequences - 1:
+            end_sequence = None
+        else:
+            end_sequence = start_indices[sample_id + 1]
+        target = targets[start_indices[sample_id]:end_sequence]
+        pred = preds[start_indices[sample_id]:end_sequence]
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for i in range(target.size(-1)):
+        if i == 0:
+            ax.plot(target[:, i], color='C{}'.format(i), label='Target')
+            ax.plot(pred[:, i], ':', color='C{}'.format(i), label='Prediction')
+        else:
+            ax.plot(target[:, i], color='C{}'.format(i), label='_nolegend_')
+            ax.plot(pred[:, i], ':', color='C{}'.format(i), label='_nolegend_')
+
+    ax.legend()
+
+    ax.set_xlabel('Time step [-]')
+    ax.set_ylabel('Temperature [°C]')
+
+    plt.tight_layout()
+    plt.show()
