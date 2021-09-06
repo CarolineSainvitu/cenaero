@@ -20,8 +20,14 @@ NUM_EPOCH_CONVERGENCE = 5
 
 
 class RNN(nn.Module):
-    def __init__(self, cell, input_size, hidden_size, output_size, num_layers):
+    def __init__(self, cell, input_size, hidden_size, output_size, num_layers,
+            mean_inputs, std_inputs, mean_targets, std_targets):
         super().__init__()
+
+        self.mean_inputs = mean_inputs
+        self.std_inputs = std_inputs
+        self.mean_targets = mean_targets
+        self.std_targets = std_targets
 
         if cell == 'gru':
             self.rnn = nn.GRU(
@@ -43,8 +49,11 @@ class RNN(nn.Module):
         )
 
     def forward(self, x, h0=None):
+        x = (x - self.mean_inputs) / self.std_inputs
         x, hn = self.rnn(x, h0)
-        return self.sequential(x), hn
+        x = self.sequential(x)
+        x = x * self.std_targets + self.mean_targets
+        return x, hn
 
 
 def masked_mse_loss(preds, targets, lengths, max_length):
@@ -138,12 +147,34 @@ def main():
     valid_inputs, valid_targets, valid_lengths = valid_dataset
     test_inputs, test_targets, test_lengths = test_dataset
 
+    # Standardization statistics
+    train_max_length = train_lengths.max().item()
+    num_train = train_inputs.size(1)
+    input_size = train_inputs.size(-1)
+    output_size = train_targets.size(-1)
+    timesteps = torch.arange(train_max_length).expand(num_train, train_max_length)
+    masks = (timesteps < train_lengths.unsqueeze(1)).T.unsqueeze(-1)
+
+    train_inputs_flatten = train_inputs[masks.expand(-1, -1, input_size)]
+    train_inputs_flatten = train_inputs_flatten.view(-1, input_size)
+    train_targets_flatten = train_targets[masks.expand(-1, -1, output_size)]
+    train_targets_flatten = train_targets_flatten.view(-1, output_size)
+
+    mean_inputs = train_inputs_flatten.mean(dim=0)
+    std_inputs = train_inputs_flatten.std(dim=0)
+    mean_targets = train_targets_flatten.mean(dim=0)
+    std_targets = train_targets_flatten.std(dim=0)
+
     rnn = RNN(
         cell='gru',
         input_size=train_inputs.size(2),
         hidden_size=HIDDEN_SIZE,
         output_size=train_targets.size(2),
-        num_layers=NUM_LAYERS)
+        num_layers=NUM_LAYERS,
+        mean_inputs=mean_inputs,
+        std_inputs=std_inputs,
+        mean_targets=mean_targets,
+        std_targets=std_targets)
 
     opt = optim.Adam(rnn.parameters(), lr=LEARNING_RATE)
 
@@ -159,7 +190,7 @@ def main():
 
     mse_loss = masked_mse_loss(test_preds, test_targets, test_lengths,
                                test_lengths.max().item())
-    print('MSE Loss: {:,.4f}'.format(mse_loss.item()))
+    print('Test MSE Loss: {:,.4f}'.format(mse_loss.item()))
 
     os.makedirs('../weights/', exist_ok=True)
     weights_file = '../weights/rnn-L{}H{}.pth'.format(NUM_LAYERS, HIDDEN_SIZE)

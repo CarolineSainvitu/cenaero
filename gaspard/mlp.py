@@ -15,13 +15,19 @@ NUM_SEQUENCES = 121
 BATCH_SIZE = 32
 HIDDEN_SIZE = 256
 NUM_HIDDEN = 2
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 NUM_EPOCH_CONVERGENCE = 5
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_hidden):
+    def __init__(self, input_size, hidden_size, output_size, num_hidden,
+            mean_inputs, std_inputs, mean_targets, std_targets):
         super().__init__()
+
+        self.mean_inputs = mean_inputs
+        self.std_inputs = std_inputs
+        self.mean_targets = mean_targets
+        self.std_targets = std_targets
 
         hidden_layers = []
         for _ in range(num_hidden - 1):
@@ -36,7 +42,10 @@ class MLP(nn.Module):
         )
 
     def forward(self, x):
-        return self.sequential(x)
+        x = (x - self.mean_inputs) / self.std_inputs
+        x = self.sequential(x)
+        x = x * self.std_targets + self.mean_targets
+        return x
 
 
 def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
@@ -112,11 +121,21 @@ def main():
     valid_inputs, valid_targets, valid_seq_lengths = valid_dataset
     test_inputs, test_targets, test_seq_lengths = test_dataset
 
+    # Standardization statistics
+    mean_inputs = train_inputs.mean(dim=0)
+    std_inputs = train_inputs.std(dim=0)
+    mean_targets = train_targets.mean(dim=0)
+    std_targets = train_targets.std(dim=0)
+
     mlp = MLP(
         input_size=train_inputs.size(1),
         hidden_size=HIDDEN_SIZE,
         output_size=train_targets.size(1),
-        num_hidden=NUM_HIDDEN)
+        num_hidden=NUM_HIDDEN,
+        mean_inputs=mean_inputs,
+        std_inputs=std_inputs,
+        mean_targets=mean_targets,
+        std_targets=std_targets)
 
     opt = optim.Adam(mlp.parameters(), lr=LEARNING_RATE)
 
@@ -130,7 +149,7 @@ def main():
         test_targets, test_preds, test_seq_lengths, recurrent=False)
 
     mse_loss = F.mse_loss(test_preds, test_targets)
-    print('MSE Loss: {:.4f}'.format(mse_loss.item()))
+    print('Test MSE Loss: {:.4f}'.format(mse_loss.item()))
 
     os.makedirs('../weights/', exist_ok=True)
     weights_file = '../weights/mlp-L{}H{}.pth'.format(NUM_HIDDEN, HIDDEN_SIZE)
