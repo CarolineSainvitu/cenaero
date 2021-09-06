@@ -1,9 +1,12 @@
 import os
+import sys
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
+import pandas as pd
 
 import utils
 
@@ -112,8 +115,19 @@ def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
 
     mlp.load_state_dict(best_weights)
 
+    return {
+        'train': train_losses,
+        'train_after': train_after_epoch_losses,
+        'valid': valid_losses
+    }
+
 
 def main():
+    if len(sys.argv) != 2:
+        print('Usage: python3 {} NAME'.format(sys.argv[0]))
+        sys.exit(1)
+    name = sys.argv[1]
+
     train_dataset, valid_dataset, test_dataset = utils.train_valid_test_split(
         range(1, NUM_SEQUENCES + 1), recurrent=False, train_ratio=0.7)
 
@@ -139,8 +153,12 @@ def main():
 
     opt = optim.Adam(mlp.parameters(), lr=LEARNING_RATE)
 
-    train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
+    stats = train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
         valid_targets, BATCH_SIZE, NUM_EPOCH_CONVERGENCE)
+
+    os.makedirs('../results/', exist_ok=True)
+    df = pd.DataFrame.from_dict(stats)
+    df.to_csv('../results/mlp-{}.csv'.format(name))
 
     with torch.no_grad():
         test_preds = mlp(test_inputs)
@@ -152,7 +170,7 @@ def main():
     print('Test MSE Loss: {:.4f}'.format(mse_loss.item()))
 
     os.makedirs('../weights/', exist_ok=True)
-    weights_file = '../weights/mlp-L{}H{}.pth'.format(NUM_HIDDEN, HIDDEN_SIZE)
+    weights_file = '../weights/mlp-{}.pth'.format(name)
     torch.save(mlp.state_dict(), weights_file)
 
 
