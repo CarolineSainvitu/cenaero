@@ -100,10 +100,11 @@ def show_sample_sequence(targets, preds, seq_lengths, recurrent=False):
 
     num_sequences = seq_lengths.size(0)
     sample_id = torch.randint(num_sequences, ())
+    seq_length = seq_lengths[sample_id]
 
     if recurrent:
-        target = targets[:, sample_id, :]
-        pred = preds[:, sample_id, :]
+        target = targets[:seq_length, sample_id, :]
+        pred = preds[:seq_length, sample_id, :]
     else:
         start_indices = seq_lengths.cumsum(dim=0)
         start_sequence = start_indices[sample_id]
