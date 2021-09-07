@@ -64,54 +64,63 @@ def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
     epoch = 0
     while num_epoch_no_improvement < num_epoch_convergence:
 
-        # Training
-        permutation = torch.randperm(num_train)
-        train_loss = 0.0
+        try:
+            # Training
+            permutation = torch.randperm(num_train)
+            train_loss = 0.0
 
-        for i in range(0, num_train, batch_size):
-            indices = permutation[i:i+batch_size]
-            batch_inputs = train_inputs[indices, :]
-            batch_targets = train_targets[indices, :]
+            for i in range(0, num_train, batch_size):
+                indices = permutation[i:i+batch_size]
+                batch_inputs = train_inputs[indices, :]
+                batch_targets = train_targets[indices, :]
 
-            batch_preds = mlp(batch_inputs)
-            loss = F.mse_loss(batch_preds, batch_targets)
+                batch_preds = mlp(batch_inputs)
+                loss = F.mse_loss(batch_preds, batch_targets)
 
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
 
-            train_loss += loss.item()
+                train_loss += loss.item()
 
-        train_loss /= int(num_train / batch_size)
-        train_losses.append(train_loss)
+            train_loss /= int(num_train / batch_size)
+            train_losses.append(train_loss)
 
-        epoch += 1
+            epoch += 1
 
-        # Training evaluation after epoch
-        with torch.no_grad():
-            train_preds = mlp(train_inputs)
-            train_after_epoch = F.mse_loss(train_preds, train_targets).item()
+            # Training evaluation after epoch
+            with torch.no_grad():
+                train_preds = mlp(train_inputs)
+                train_after_epoch = F.mse_loss(train_preds, train_targets).item()
 
-        train_after_epoch_losses.append(train_after_epoch)
+            train_after_epoch_losses.append(train_after_epoch)
 
-        # Validation
-        with torch.no_grad():
-            valid_preds = mlp(valid_inputs)
-            valid_loss = F.mse_loss(valid_preds, valid_targets).item()
+            # Validation
+            with torch.no_grad():
+                valid_preds = mlp(valid_inputs)
+                valid_loss = F.mse_loss(valid_preds, valid_targets).item()
 
-        valid_losses.append(valid_loss)
+            valid_losses.append(valid_loss)
 
-        if valid_loss < lowest_loss:
-            lowest_loss = valid_loss
-            num_epoch_no_improvement = 0
-            best_weights = deepcopy(mlp.state_dict())
-        else:
-            num_epoch_no_improvement += 1
+            if valid_loss < lowest_loss:
+                lowest_loss = valid_loss
+                num_epoch_no_improvement = 0
+                best_weights = deepcopy(mlp.state_dict())
+            else:
+                num_epoch_no_improvement += 1
 
-        print('Epoch {:03d}'.format(epoch))
-        print('\tTrain: {:.4f}'.format(train_loss))
-        print('\tTrain after epoch: {:.4f}'.format(train_after_epoch))
-        print('\tValid: {:.4f}'.format(valid_loss))
+            print('Epoch {:03d}'.format(epoch))
+            print('\tTrain: {:.4f}'.format(train_loss))
+            print('\tTrain after epoch: {:.4f}'.format(train_after_epoch))
+            print('\tValid: {:.4f}'.format(valid_loss))
+
+        except KeyboardInterrupt:
+            if len(train_after_epoch_losses) < len(train_losses):
+                train_after_epoch_losses.append(None)
+            if len(valid_losses) < len(train_losses):
+                valid_losses.append(None)
+            print()
+            break
 
     mlp.load_state_dict(best_weights)
 

@@ -89,59 +89,69 @@ def train_rnn(rnn, opt, train_inputs, train_targets, train_lengths,
     epoch = 0
     while num_epoch_no_improvement <= num_epoch_convergence:
 
-        # Training
-        permutation = torch.randperm(num_train)
-        train_loss = 0.0
+        try:
+            # Training
+            permutation = torch.randperm(num_train)
+            train_loss = 0.0
 
-        for i in range(0, num_train, batch_size):
-            indices = permutation[i:i+batch_size]
-            actual_batch_size = len(indices)
+            for i in range(0, num_train, batch_size):
+                indices = permutation[i:i+batch_size]
+                actual_batch_size = len(indices)
 
-            batch_inputs = train_inputs[:, indices, :]
-            batch_targets = train_targets[:, indices, :]
-            batch_lengths = train_lengths[indices]
+                batch_inputs = train_inputs[:, indices, :]
+                batch_targets = train_targets[:, indices, :]
+                batch_lengths = train_lengths[indices]
 
-            batch_preds, _ = rnn(batch_inputs)
-            loss = masked_mse_loss(batch_preds, batch_targets, batch_lengths,
-                                   train_max_length)
+                batch_preds, _ = rnn(batch_inputs)
+                loss = masked_mse_loss(batch_preds, batch_targets,
+                                       batch_lengths, train_max_length)
 
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
 
-            train_loss += loss.item()
+                train_loss += loss.item()
 
-        train_loss /= int(num_train / batch_size)
-        train_losses.append(train_loss)
+            train_loss /= int(num_train / batch_size)
+            train_losses.append(train_loss)
 
-        epoch += 1
+            epoch += 1
 
-        # Training evaluation after epoch
-        with torch.no_grad():
-            train_preds, _ = rnn(train_inputs)
-            train_after_epoch = masked_mse_loss(train_preds, train_targets,
-                                                train_lengths,
-                                                train_max_length)
-        train_after_epoch_losses.append(train_after_epoch.item())
+            # Training evaluation after epoch
+            with torch.no_grad():
+                train_preds, _ = rnn(train_inputs)
+                train_after_epoch = masked_mse_loss(train_preds,
+                                                    train_targets,
+                                                    train_lengths,
+                                                    train_max_length)
+            train_after_epoch_losses.append(train_after_epoch.item())
 
-        # Validation
-        with torch.no_grad():
-            valid_preds, _ = rnn(valid_inputs)
-            valid_loss = masked_mse_loss(valid_preds, valid_targets,
-                                         valid_lengths, valid_max_length)
-        valid_losses.append(valid_loss.item())
+            # Validation
+            with torch.no_grad():
+                valid_preds, _ = rnn(valid_inputs)
+                valid_loss = masked_mse_loss(valid_preds, valid_targets,
+                                             valid_lengths, valid_max_length)
+            valid_losses.append(valid_loss.item())
 
-        if valid_loss < lowest_loss:
-            lowest_loss = valid_loss
-            num_epoch_no_improvement = 0
-            best_weights = deepcopy(rnn.state_dict())
-        else:
-            num_epoch_no_improvement += 1
+            if valid_loss < lowest_loss:
+                lowest_loss = valid_loss
+                num_epoch_no_improvement = 0
+                best_weights = deepcopy(rnn.state_dict())
+            else:
+                num_epoch_no_improvement += 1
 
-        print('Epoch {:03d}'.format(epoch))
-        print('\tTrain: {:,.4f}'.format(train_loss))
-        print('\tTrain after epoch: {:,.4f}'.format(train_after_epoch))
-        print('\tValid: {:,.4f}'.format(valid_loss))
+            print('Epoch {:03d}'.format(epoch))
+            print('\tTrain: {:,.4f}'.format(train_loss))
+            print('\tTrain after epoch: {:,.4f}'.format(train_after_epoch))
+            print('\tValid: {:,.4f}'.format(valid_loss))
+
+        except KeyboardInterrupt:
+            if len(train_after_epoch_losses) < len(train_losses):
+                train_after_epoch_losses.append(None)
+            if len(valid_losses) < len(train_losses):
+                valid_losses.append(None)
+            print()
+            break
 
     rnn.load_state_dict(best_weights)
 
