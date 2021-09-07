@@ -15,16 +15,20 @@ from copy import deepcopy
 
 NUM_SEQUENCES = 121
 
+SEQUENCE_STRIDE = 10
+
 BATCH_SIZE = 16
-HIDDEN_SIZE = 256
+RNN_HIDDEN_SIZE = 256
+MLP_HIDDEN_SIZE = 1024
 NUM_LAYERS = 2
 LEARNING_RATE = 1e-3
 NUM_EPOCH_CONVERGENCE = 5
 
 
 class RNN(nn.Module):
-    def __init__(self, cell, input_size, hidden_size, output_size, num_layers,
-            mean_inputs, std_inputs, mean_targets, std_targets):
+    def __init__(self, cell, input_size, rnn_hidden_size, mlp_hidden_size,
+            output_size, num_layers, mean_inputs, std_inputs, mean_targets,
+            std_targets):
         super().__init__()
 
         self.mean_inputs = mean_inputs
@@ -35,20 +39,20 @@ class RNN(nn.Module):
         if cell == 'gru':
             self.rnn = nn.GRU(
                 input_size=input_size,
-                hidden_size=hidden_size,
+                hidden_size=rnn_hidden_size,
                 num_layers=num_layers)
         elif cell == 'lstm':
             self.rnn = nn.LSTM(
                 input_size=input_size,
-                hidden_size=hidden_size,
+                hidden_size=rnn_hidden_size,
                 num_layers=num_layers)
         else:
             raise NotImplementedError
 
         self.sequential = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(rnn_hidden_size, mlp_hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(mlp_hidden_size, output_size)
         )
 
     def forward(self, x, h0=None):
@@ -155,7 +159,8 @@ def main():
     name = sys.argv[1]
 
     train_dataset, valid_dataset, test_dataset = utils.train_valid_test_split(
-        range(1, NUM_SEQUENCES + 1), recurrent=True, train_ratio=0.7)
+        range(1, NUM_SEQUENCES + 1), recurrent=True, train_ratio=0.7,
+        sequence_stride=SEQUENCE_STRIDE)
 
     train_inputs, train_targets, train_lengths = train_dataset
     valid_inputs, valid_targets, valid_lengths = valid_dataset
@@ -166,7 +171,8 @@ def main():
     num_train = train_inputs.size(1)
     input_size = train_inputs.size(-1)
     output_size = train_targets.size(-1)
-    timesteps = torch.arange(train_max_length).expand(num_train, train_max_length)
+    timesteps = torch.arange(train_max_length).expand(num_train,
+                                                      train_max_length)
     masks = (timesteps < train_lengths.unsqueeze(1)).T.unsqueeze(-1)
 
     train_inputs_flatten = train_inputs[masks.expand(-1, -1, input_size)]
@@ -182,7 +188,8 @@ def main():
     rnn = RNN(
         cell='gru',
         input_size=train_inputs.size(2),
-        hidden_size=HIDDEN_SIZE,
+        rnn_hidden_size=RNN_HIDDEN_SIZE,
+        mlp_hidden_size=MLP_HIDDEN_SIZE,
         output_size=train_targets.size(2),
         num_layers=NUM_LAYERS,
         mean_inputs=mean_inputs,

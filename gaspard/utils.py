@@ -9,7 +9,7 @@ DATA_PATH = '../data/38Q31TzlO-{}/npz_data/data.npz'
 PARAMS_PATH = '../data/38Q31TzlO-{}/Minamo_Parameters-Wall2D.txt'
 
 
-def load_data(simulation_ids, recurrent=False):
+def load_data(simulation_ids, recurrent=False, sequence_stride=10):
 
     inputs, targets = [], []
 
@@ -50,10 +50,9 @@ def load_data(simulation_ids, recurrent=False):
                 for i in range(6)],
             dim=1)
 
-        # TODO: delete this
         if recurrent:
-            input = input[::20, :]
-            target = target[::20, :]
+            input = input[::sequence_stride, :]
+            target = target[::sequence_stride, :]
 
         inputs.append(input)
         targets.append(target)
@@ -75,7 +74,7 @@ def load_data(simulation_ids, recurrent=False):
 
 
 def train_valid_test_split(sequence_ids, recurrent=False, train_ratio=0.7,
-        seed=20210831):
+        seed=20210831, sequence_stride=10):
 
     # Shuffle sequences with a random seed
     torch.random.manual_seed(seed)
@@ -91,9 +90,9 @@ def train_valid_test_split(sequence_ids, recurrent=False, train_ratio=0.7,
     valid_ids = shuffled_ids[end_train:end_valid]
     test_ids = shuffled_ids[end_valid:]
 
-    train_dataset = load_data(train_ids, recurrent)
-    valid_dataset = load_data(valid_ids, recurrent)
-    test_dataset = load_data(test_ids, recurrent)
+    train_dataset = load_data(train_ids, recurrent, sequence_stride)
+    valid_dataset = load_data(valid_ids, recurrent, sequence_stride)
+    test_dataset = load_data(test_ids, recurrent, sequence_stride)
 
     return train_dataset, valid_dataset, test_dataset
 
