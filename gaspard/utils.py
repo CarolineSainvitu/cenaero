@@ -8,6 +8,8 @@ import torch.nn as nn
 DATA_PATH = '../data/38Q31TzlO-{}/npz_data/data.npz'
 PARAMS_PATH = '../data/38Q31TzlO-{}/Minamo_Parameters-Wall2D.txt'
 
+Y_POSITIONS = [10.0, 6.0, 2.0]
+POINTS_BY_Y = [(1, 2), (3, 4), (5, 6)]
 
 def load_data(simulation_ids, recurrent=False, sequence_stride=10):
 
@@ -32,30 +34,36 @@ def load_data(simulation_ids, recurrent=False, sequence_stride=10):
         power = torch.full(laser_power.shape, power)
         break_time = torch.full(laser_power.shape, break_time)
 
-        if recurrent:
-            # Create a feature `delta`
-            delta = time.clone()
-            delta[1:] = time[1:] - time[:-1]
-            input = torch.stack(
-                (delta, laser_position, laser_power, power, break_time),
+        for points, y in zip(POINTS_BY_Y, Y_POSITIONS):
+
+            y_position = torch.full(laser_power.shape, y)
+
+            if recurrent:
+                # Create a feature `delta`
+                delta = time.clone()
+                delta[1:] = time[1:] - time[:-1]
+                input = torch.stack(
+                    (delta, laser_position, laser_power, power, break_time,
+                        y_position),
+                    dim=1)
+            else:
+                input = torch.stack(
+                    (time, laser_position, laser_power, power, break_time,
+                        y_position),
+                    dim=1)
+
+            # Extract target data: `P^1_t`, ..., `P^6_t`
+            target = torch.stack(
+                [torch.from_numpy(data['T{}'.format(i)]).float()
+                    for i in points],
                 dim=1)
-        else:
-            input = torch.stack(
-                (time, laser_position, laser_power, power, break_time),
-                dim=1)
 
-        # Extract target data: `P^1_t`, ..., `P^6_t`
-        target = torch.stack(
-            [torch.from_numpy(data['T{}'.format(i + 1)]).float()
-                for i in range(6)],
-            dim=1)
+            if recurrent:
+                input = input[::sequence_stride, :]
+                target = target[::sequence_stride, :]
 
-        if recurrent:
-            input = input[::sequence_stride, :]
-            target = target[::sequence_stride, :]
-
-        inputs.append(input)
-        targets.append(target)
+            inputs.append(input)
+            targets.append(target)
 
     # Extract sequences lengths
     seq_lengths = torch.tensor([len(input) for input in inputs])
