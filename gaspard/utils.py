@@ -28,16 +28,18 @@ def load_data(simulation_ids, recurrent=False):
             power = float(lines[0].split(' = ')[1])
             break_time = float(lines[1].split(' = ')[1])
 
+        # Create features `P` and `b`
+        power = torch.full(laser_power.shape, power)
+        break_time = torch.full(laser_power.shape, break_time)
+
         if recurrent:
             # Create a feature `delta`
             delta = time.clone()
             delta[1:] = time[1:] - time[:-1]
-            input = torch.stack((delta, laser_position, laser_power), dim=1)
+            input = torch.stack(
+                (delta, laser_position, laser_power, power, break_time),
+                dim=1)
         else:
-            # Create features `P` and `b`
-            power = torch.full(laser_power.shape, power)
-            break_time = torch.full(laser_power.shape, break_time)
-
             input = torch.stack(
                 (time, laser_position, laser_power, power, break_time),
                 dim=1)
