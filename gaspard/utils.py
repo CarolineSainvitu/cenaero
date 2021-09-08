@@ -137,10 +137,14 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
         train_targets, valid_targets = split(targets, splits)
         train_lengths, valid_lengths = split(lengths, splits)
 
-        inputs_test, targets_test, lengtths_test = load_data(
+        test_inputs, test_targets, test_lengths = load_data(
             ['additional'],
             recurrent=False,
             sequence_stride=sequence_stride)
+
+        test_inputs, = split(test_inputs, ())
+        test_targets, = split(test_targets, ())
+        test_lengths, = split(test_lengths, ())
 
     elif scenario == 3:
 
@@ -154,10 +158,14 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
         train_targets, valid_targets = split(targets, splits)
         train_lengths, valid_lengths = split(lengths, splits)
 
-        inputs_test, targets_test, lengtths_test = load_data(
+        test_inputs, test_targets, test_lengths = load_data(
             ['P<', 'P>', 'b>'],
             recurrent=False,
             sequence_stride=sequence_stride)
+
+        test_inputs = split(test_inputs, ())
+        test_targets = split(test_targets, ())
+        test_lengths = split(test_lengths, ())
 
     elif scenario == 4:
 
@@ -183,10 +191,14 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
         train_targets, valid_targets = split(targets, splits)
         train_lengths, valid_lengths = split(lengths, splits)
 
-        inputs_test, targets_test, lengtths_test = load_data(
+        test_inputs, test_targets, test_lengths = load_data(
             ['P<', 'P>', 'b>'],
             recurrent=False,
             sequence_stride=sequence_stride)
+
+        test_inputs = split(test_inputs, ())
+        test_targets = split(test_targets, ())
+        test_lengths = split(test_lengths, ())
 
     else:
         raise ValueError('SCENARIO is not valid')

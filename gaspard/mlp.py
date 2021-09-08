@@ -15,8 +15,6 @@ from utils import load_data, split, get_scenario
 from copy import deepcopy
 
 
-SCENARIO = 1
-
 SEQUENCE_STRIDE = 10
 
 BATCH_SIZE = 32
@@ -136,13 +134,14 @@ def train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
 
 
 def main():
-    if len(sys.argv) != 2:
-        print('Usage: python3 {} NAME'.format(sys.argv[0]))
+    if len(sys.argv) != 3:
+        print('Usage: python3 {} NAME SCENARIO'.format(sys.argv[0]))
         sys.exit(1)
     name = sys.argv[1]
+    scenario = int(sys.argv[2])
 
     train_dataset, valid_dataset, test_dataset, train_stats = get_scenario(
-        SCENARIO,
+        scenario,
         recurrent=False,
         sequence_stride=SEQUENCE_STRIDE)
 
