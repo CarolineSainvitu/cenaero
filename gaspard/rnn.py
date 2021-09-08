@@ -1,6 +1,8 @@
 import os
 import sys
 
+from time import perf_counter
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,12 +10,12 @@ import torch.nn.functional as F
 
 import pandas as pd
 
-import utils
+from utils import load_data, split, show_sample_sequence, get_scenario
 
 from copy import deepcopy
 
 
-NUM_SEQUENCES = 121
+SCENARIO = 1
 
 SEQUENCE_STRIDE = 10
 
@@ -72,6 +74,7 @@ def masked_mse_loss(preds, targets, lengths, max_length):
 
     masked_difference = (preds - targets) * masks
     return (masked_difference ** 2).sum() / (masks.sum() * output_size)
+
 
 def train_rnn(rnn, opt, train_inputs, train_targets, train_lengths,
         valid_inputs, valid_targets, valid_lengths, batch_size,
@@ -168,32 +171,19 @@ def main():
         sys.exit(1)
     name = sys.argv[1]
 
-    train_dataset, valid_dataset, test_dataset = utils.train_valid_test_split(
-        range(1, NUM_SEQUENCES + 1), recurrent=True, train_ratio=0.7,
+    train_dataset, valid_dataset, test_dataset, train_stats = get_scenario(
+        SCENARIO,
+        recurrent=True,
         sequence_stride=SEQUENCE_STRIDE)
 
     train_inputs, train_targets, train_lengths = train_dataset
     valid_inputs, valid_targets, valid_lengths = valid_dataset
     test_inputs, test_targets, test_lengths = test_dataset
+    mean_inputs, std_inputs, mean_targets, std_targets = train_stats
 
-    # Standardization statistics
-    train_max_length = train_lengths.max().item()
-    num_train = train_inputs.size(1)
-    input_size = train_inputs.size(-1)
-    output_size = train_targets.size(-1)
-    timesteps = torch.arange(train_max_length).expand(num_train,
-                                                      train_max_length)
-    masks = (timesteps < train_lengths.unsqueeze(1)).T.unsqueeze(-1)
-
-    train_inputs_flatten = train_inputs[masks.expand(-1, -1, input_size)]
-    train_inputs_flatten = train_inputs_flatten.view(-1, input_size)
-    train_targets_flatten = train_targets[masks.expand(-1, -1, output_size)]
-    train_targets_flatten = train_targets_flatten.view(-1, output_size)
-
-    mean_inputs = train_inputs_flatten.mean(dim=0)
-    std_inputs = train_inputs_flatten.std(dim=0)
-    mean_targets = train_targets_flatten.mean(dim=0)
-    std_targets = train_targets_flatten.std(dim=0)
+    print('Training size: {}'.format(train_inputs.size(1)))
+    print('Validation size: {}'.format(valid_inputs.size(1)))
+    print('Test size: {}'.format(test_inputs.size(1)))
 
     rnn = RNN(
         cell='gru',
@@ -209,19 +199,21 @@ def main():
 
     opt = optim.Adam(rnn.parameters(), lr=LEARNING_RATE)
 
+    start = perf_counter()
     stats = train_rnn(rnn, opt, train_inputs, train_targets, train_lengths,
         valid_inputs, valid_targets, valid_lengths, BATCH_SIZE,
         NUM_EPOCH_CONVERGENCE)
+    end = perf_counter()
 
     os.makedirs('../results/', exist_ok=True)
     df = pd.DataFrame.from_dict(stats)
     df.to_csv('../results/rnn-{}.csv'.format(name))
 
+    print('Total CPU time {:.2f}'.format(end - start))
+    print('CPU time per epoch {:.2f}'.format((end - start) / len(df)))
+
     with torch.no_grad():
         test_preds, _ = rnn(test_inputs)
-
-    utils.show_sample_sequence(
-        test_targets, test_preds, test_lengths, recurrent=True)
 
     mse_loss = masked_mse_loss(test_preds, test_targets, test_lengths,
                                test_lengths.max().item())

@@ -1,6 +1,8 @@
 import os
 import sys
 
+from time import perf_counter
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,18 +10,20 @@ import torch.nn.functional as F
 
 import pandas as pd
 
-import utils
+from utils import load_data, split, get_scenario
 
 from copy import deepcopy
 
 
-NUM_SEQUENCES = 121
+SCENARIO = 1
+
+SEQUENCE_STRIDE = 10
 
 BATCH_SIZE = 32
 HIDDEN_SIZE = 256
 NUM_HIDDEN = 2
-LEARNING_RATE = 1e-4
-NUM_EPOCH_CONVERGENCE = 5
+LEARNING_RATE = 1e-3
+NUM_EPOCH_CONVERGENCE = 8
 
 
 class MLP(nn.Module):
@@ -137,18 +141,19 @@ def main():
         sys.exit(1)
     name = sys.argv[1]
 
-    train_dataset, valid_dataset, test_dataset = utils.train_valid_test_split(
-        range(1, NUM_SEQUENCES + 1), recurrent=False, train_ratio=0.7)
+    train_dataset, valid_dataset, test_dataset, train_stats = get_scenario(
+        SCENARIO,
+        recurrent=False,
+        sequence_stride=SEQUENCE_STRIDE)
 
-    train_inputs, train_targets, train_seq_lengths = train_dataset
-    valid_inputs, valid_targets, valid_seq_lengths = valid_dataset
-    test_inputs, test_targets, test_seq_lengths = test_dataset
+    train_inputs, train_targets, train_lengths = train_dataset
+    valid_inputs, valid_targets, valid_lengths = valid_dataset
+    test_inputs, test_targets, test_lengths = test_dataset
+    mean_inputs, std_inputs, mean_targets, std_targets = train_stats
 
-    # Standardization statistics
-    mean_inputs = train_inputs.mean(dim=0)
-    std_inputs = train_inputs.std(dim=0)
-    mean_targets = train_targets.mean(dim=0)
-    std_targets = train_targets.std(dim=0)
+    print('Training size: {}'.format(train_inputs.size(0)))
+    print('Validation size: {}'.format(valid_inputs.size(0)))
+    print('Test size: {}'.format(test_inputs.size(0)))
 
     mlp = MLP(
         input_size=train_inputs.size(1),
@@ -162,18 +167,20 @@ def main():
 
     opt = optim.Adam(mlp.parameters(), lr=LEARNING_RATE)
 
+    start = perf_counter()
     stats = train_mlp(mlp, opt, train_inputs, train_targets, valid_inputs,
         valid_targets, BATCH_SIZE, NUM_EPOCH_CONVERGENCE)
+    end = perf_counter()
 
     os.makedirs('../results/', exist_ok=True)
     df = pd.DataFrame.from_dict(stats)
     df.to_csv('../results/mlp-{}.csv'.format(name))
 
+    print('Total CPU time {:.2f}'.format(end - start))
+    print('CPU time per epoch {:.2f}'.format((end - start) / len(df)))
+
     with torch.no_grad():
         test_preds = mlp(test_inputs)
-
-    utils.show_sample_sequence(
-        test_targets, test_preds, test_seq_lengths, recurrent=False)
 
     mse_loss = F.mse_loss(test_preds, test_targets)
     print('Test MSE Loss: {:.4f}'.format(mse_loss.item()))

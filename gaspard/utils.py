@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -5,8 +7,16 @@ import torch
 import torch.nn as nn
 
 
-DATA_PATH = '../data/38Q31TzlO-{}/npz_data/data.npz'
-PARAMS_PATH = '../data/38Q31TzlO-{}/Minamo_Parameters-Wall2D.txt'
+DIRECTORIES_NAMES = {
+    'initial': '38Q31TzlO',
+    'b>': '38gYX2QrJ',
+    'P>': '38gWjjw40',
+    'additional': '38fO5rac1',
+    'P<': '38gVDgZf9'
+}
+
+DATA_PATH = '../data/{}-{}/npz_data/data.npz'
+PARAMS_PATH = '../data/{}-{}/Minamo_Parameters-Wall2D.txt'
 
 POSITIONS = [
     (0.0, 10.0),
@@ -18,96 +28,214 @@ POSITIONS = [
 ]
 
 
-def load_data(simulation_ids, recurrent=False, sequence_stride=10):
+def load_data(datasets, recurrent=False, sequence_stride=10):
 
     inputs, targets = [], []
 
-    for simulation_id in simulation_ids:
+    for dataset in datasets:
 
-        data = np.load(DATA_PATH.format(simulation_id))
+        directory_name = DIRECTORIES_NAMES[dataset]
+        simulation_id = 1
 
-        # Extract input data: `t`, `x_t`, `P_t`
-        time = torch.from_numpy(data['time']).float()
-        laser_position = torch.from_numpy(data['laser_position_x']).float()
-        laser_power = torch.from_numpy(data['laser_power']).float()
+        data_path = DATA_PATH.format(directory_name, '{}')
+        params_path = PARAMS_PATH.format(directory_name, '{}')
 
-        # Parse parameters
-        with open(PARAMS_PATH.format(simulation_id)) as params_file:
-            lines = params_file.read().splitlines()
-            power = float(lines[0].split(' = ')[1])
-            break_time = float(lines[1].split(' = ')[1])
+        while os.path.exists(data_path.format(simulation_id)):
 
-        # Create features `P` and `b`
-        power = torch.full(laser_power.shape, power)
-        break_time = torch.full(laser_power.shape, break_time)
+            data = np.load(data_path.format(simulation_id))
 
-        for i, (x, y) in enumerate(POSITIONS):
+            # Extract input data: `t`, `x_t`, `P_t`
+            time = torch.from_numpy(data['time']).float()
+            laser_position = torch.from_numpy(data['laser_position_x']).float()
+            laser_power = torch.from_numpy(data['laser_power']).float()
 
-            x_position = torch.full(laser_power.shape, x)
-            y_position = torch.full(laser_power.shape, y)
+            # Parse parameters
+            with open(params_path.format(simulation_id)) as params_file:
+                lines = params_file.read().splitlines()
+                power = float(lines[0].split(' = ')[1])
+                break_time = float(lines[1].split(' = ')[1])
 
-            if recurrent:
-                # Create a feature `delta`
-                delta = time.clone()
-                delta[1:] = time[1:] - time[:-1]
-                input = torch.stack(
-                    (delta, laser_position, laser_power, power, break_time,
-                        x_position, y_position),
-                    dim=1)
-            else:
-                input = torch.stack(
-                    (time, laser_position, laser_power, power, break_time,
-                        x_position, y_position),
-                    dim=1)
+            # Create features `P` and `b`
+            power = torch.full(laser_power.shape, power)
+            break_time = torch.full(laser_power.shape, break_time)
 
-            # Extract target data: `P^1_t`, ..., `P^6_t`
-            target = torch.from_numpy(data['T{}'.format(i + 1)]).float().unsqueeze(-1)
+            for i, (x, y) in enumerate(POSITIONS):
 
-            if recurrent:
+                x_position = torch.full(laser_power.shape, x)
+                y_position = torch.full(laser_power.shape, y)
+
+                if recurrent:
+                    # Create a feature `delta`
+                    delta = time.clone()
+                    delta[1:] = time[1:] - time[:-1]
+                    input = torch.stack(
+                        (delta, laser_position, laser_power, power, break_time,
+                            x_position, y_position),
+                        dim=1)
+                else:
+                    input = torch.stack(
+                        (time, laser_position, laser_power, power, break_time,
+                            x_position, y_position),
+                        dim=1)
+
+                # Extract target data: `P^1_t`, ..., `P^6_t`
+                target = torch.from_numpy(data['T{}'.format(i + 1)]).float()
+                target = target.unsqueeze(-1)
+
                 input = input[::sequence_stride, :]
                 target = target[::sequence_stride, :]
 
-            inputs.append(input)
-            targets.append(target)
+                inputs.append(input)
+                targets.append(target)
 
-    # Extract sequences lengths
-    seq_lengths = torch.tensor([len(input) for input in inputs])
+            simulation_id += 1
 
-    if recurrent:
-        # Pad sequences and stack them to create the dataset
-        inputs = nn.utils.rnn.pad_sequence(inputs)
-        targets = nn.utils.rnn.pad_sequence(targets)
+        # Extract sequences lengths
+        lengths = [len(input) for input in inputs]
+
+    return inputs, targets, lengths
+
+
+def split(sequences, splits, seed=20210831):
+    torch.random.manual_seed(seed)
+    num_sequences = len(sequences)
+    permutation = torch.randperm(num_sequences)
+
+    datasets = []
+    start = None
+    for split in splits + (None,):
+        end = int(split * num_sequences) if split is not None else None
+        datasets.append([sequences[i] for i in permutation[start:end]])
+        start = end
+
+    return datasets
+
+
+def get_scenario(scenario, recurrent=False, sequence_stride=10):
+
+    if scenario == 1:
+
+        inputs, targets, lengths = load_data(['initial'],
+                                             recurrent=False,
+                                             sequence_stride=sequence_stride)
+
+        splits = (0.7, 0.85)
+
+        train_inputs, valid_inputs, test_inputs = split(inputs, splits)
+        train_targets, valid_targets, test_targets = split(targets, splits)
+        train_lengths, valid_lengths, test_lengths = split(lengths, splits)
+
+    elif scenario == 2:
+
+        inputs, targets, lengths = load_data(['initial'],
+                                             recurrent=False,
+                                             sequence_stride=sequence_stride)
+
+        splits = (0.8,)
+
+        train_inputs, valid_inputs = split(inputs, splits)
+        train_targets, valid_targets = split(targets, splits)
+        train_lengths, valid_lengths = split(lengths, splits)
+
+        inputs_test, targets_test, lengtths_test = load_data(
+            ['additional'],
+            recurrent=False,
+            sequence_stride=sequence_stride)
+
+    elif scenario == 3:
+
+        inputs, targets, lengths = load_data(['initial'],
+                                             recurrent=False,
+                                             sequence_stride=sequence_stride)
+
+        splits = (0.8,)
+
+        train_inputs, valid_inputs = split(inputs, splits)
+        train_targets, valid_targets = split(targets, splits)
+        train_lengths, valid_lengths = split(lengths, splits)
+
+        inputs_test, targets_test, lengtths_test = load_data(
+            ['P<', 'P>', 'b>'],
+            recurrent=False,
+            sequence_stride=sequence_stride)
+
+    elif scenario == 4:
+
+        inputs, targets, lengths = load_data(['initial', 'additional'],
+                                             recurrent=False,
+                                             sequence_stride=sequence_stride)
+
+        splits = (0.7, 0.85)
+
+        train_inputs, valid_inputs, test_inputs = split(inputs, splits)
+        train_targets, valid_targets, test_targets = split(targets, splits)
+        train_lengths, valid_lengths, test_lengths = split(lengths, splits)
+
+    elif scenario == 5:
+
+        inputs, targets, lengths = load_data(['initial', 'additional'],
+                                             recurrent=False,
+                                             sequence_stride=sequence_stride)
+
+        splits = (0.8,)
+
+        train_inputs, valid_inputs = split(inputs, splits)
+        train_targets, valid_targets = split(targets, splits)
+        train_lengths, valid_lengths = split(lengths, splits)
+
+        inputs_test, targets_test, lengtths_test = load_data(
+            ['P<', 'P>', 'b>'],
+            recurrent=False,
+            sequence_stride=sequence_stride)
 
     else:
-        # Concatenate all sequences to create the dataset
-        inputs = torch.cat(inputs, dim=0)
-        targets = torch.cat(targets, dim=0)
+        raise ValueError('SCENARIO is not valid')
 
-    return inputs, targets, seq_lengths
+    if recurrent:
+        train_inputs_flatten = torch.cat(train_inputs, dim=0)
+        valid_inputs_flatten = torch.cat(valid_inputs, dim=0)
+        test_inputs_flatten = torch.cat(test_inputs, dim=0)
+
+        train_targets_flatten = torch.cat(train_targets, dim=0)
+        valid_targets_flatten = torch.cat(valid_targets, dim=0)
+        test_targets_flatten = torch.cat(test_targets, dim=0)
+
+        mean_inputs = train_inputs_flatten.mean(dim=0)
+        std_inputs = train_inputs_flatten.std(dim=0)
+        mean_targets = train_targets_flatten.mean(dim=0)
+        std_targets = train_targets_flatten.std(dim=0)
+
+        train_inputs = nn.utils.rnn.pad_sequence(train_inputs)
+        valid_inputs = nn.utils.rnn.pad_sequence(valid_inputs)
+        test_inputs = nn.utils.rnn.pad_sequence(test_inputs)
+
+        train_targets = nn.utils.rnn.pad_sequence(train_targets)
+        valid_targets = nn.utils.rnn.pad_sequence(valid_targets)
+        test_targets = nn.utils.rnn.pad_sequence(test_targets)
+    else:
+        train_inputs = torch.cat(train_inputs, dim=0)
+        valid_inputs = torch.cat(valid_inputs, dim=0)
+        test_inputs = torch.cat(test_inputs, dim=0)
+
+        train_targets = torch.cat(train_targets, dim=0)
+        valid_targets = torch.cat(valid_targets, dim=0)
+        test_targets = torch.cat(test_targets, dim=0)
+
+        mean_inputs = train_inputs.mean(dim=0)
+        std_inputs = train_inputs.std(dim=0)
+        mean_targets = train_targets.mean(dim=0)
+        std_targets = train_targets.std(dim=0)
+
+    train_lengths = torch.tensor(train_lengths)
+    valid_lengths = torch.tensor(valid_lengths)
+    test_lengths = torch.tensor(test_lengths)
+
+    return ((train_inputs, train_targets, train_lengths),
+            (valid_inputs, valid_targets, valid_lengths),
+            (test_inputs, test_targets, test_lengths),
+            (mean_inputs, std_inputs, mean_targets, std_targets))
 
 
-def train_valid_test_split(sequence_ids, recurrent=False, train_ratio=0.7,
-        seed=20210831, sequence_stride=10):
-
-    # Shuffle sequences with a random seed
-    torch.random.manual_seed(seed)
-    n_sequences = len(sequence_ids)
-    permutation = torch.randperm(n_sequences)
-    shuffled_ids = torch.tensor(sequence_ids)[permutation]
-
-    # Split sequences
-    end_train = int(train_ratio * n_sequences)
-    end_valid = int((train_ratio + 0.5 * (1.0 - train_ratio)) * n_sequences)
-
-    train_ids = shuffled_ids[:end_train]
-    valid_ids = shuffled_ids[end_train:end_valid]
-    test_ids = shuffled_ids[end_valid:]
-
-    train_dataset = load_data(train_ids, recurrent, sequence_stride)
-    valid_dataset = load_data(valid_ids, recurrent, sequence_stride)
-    test_dataset = load_data(test_ids, recurrent, sequence_stride)
-
-    return train_dataset, valid_dataset, test_dataset
 
 
 def show_sample_sequence(targets, preds, seq_lengths, recurrent=False):
