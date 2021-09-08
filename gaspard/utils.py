@@ -116,7 +116,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
     if scenario == 1:
 
         inputs, targets, lengths = load_data(['initial'],
-                                             recurrent=False,
+                                             recurrent=recurrent,
                                              sequence_stride=sequence_stride)
 
         splits = (0.7, 0.85)
@@ -128,7 +128,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
     elif scenario == 2:
 
         inputs, targets, lengths = load_data(['initial'],
-                                             recurrent=False,
+                                             recurrent=recurrent,
                                              sequence_stride=sequence_stride)
 
         splits = (0.8,)
@@ -149,7 +149,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
     elif scenario == 3:
 
         inputs, targets, lengths = load_data(['initial'],
-                                             recurrent=False,
+                                             recurrent=recurrent,
                                              sequence_stride=sequence_stride)
 
         splits = (0.8,)
@@ -163,14 +163,14 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
             recurrent=False,
             sequence_stride=sequence_stride)
 
-        test_inputs = split(test_inputs, ())
-        test_targets = split(test_targets, ())
-        test_lengths = split(test_lengths, ())
+        test_inputs, = split(test_inputs, ())
+        test_targets, = split(test_targets, ())
+        test_lengths, = split(test_lengths, ())
 
     elif scenario == 4:
 
         inputs, targets, lengths = load_data(['initial', 'additional'],
-                                             recurrent=False,
+                                             recurrent=recurrent,
                                              sequence_stride=sequence_stride)
 
         splits = (0.7, 0.85)
@@ -182,7 +182,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
     elif scenario == 5:
 
         inputs, targets, lengths = load_data(['initial', 'additional'],
-                                             recurrent=False,
+                                             recurrent=recurrent,
                                              sequence_stride=sequence_stride)
 
         splits = (0.8,)
@@ -196,9 +196,9 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
             recurrent=False,
             sequence_stride=sequence_stride)
 
-        test_inputs = split(test_inputs, ())
-        test_targets = split(test_targets, ())
-        test_lengths = split(test_lengths, ())
+        test_inputs, = split(test_inputs, ())
+        test_targets, = split(test_targets, ())
+        test_lengths, = split(test_lengths, ())
 
     else:
         raise ValueError('SCENARIO is not valid')
@@ -246,8 +246,6 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
             (valid_inputs, valid_targets, valid_lengths),
             (test_inputs, test_targets, test_lengths),
             (mean_inputs, std_inputs, mean_targets, std_targets))
-
-
 
 
 def show_sample_sequence(targets, preds, seq_lengths, recurrent=False):
