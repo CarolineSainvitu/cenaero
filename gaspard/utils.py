@@ -139,7 +139,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
 
         test_inputs, test_targets, test_lengths = load_data(
             ['additional'],
-            recurrent=False,
+            recurrent=recurrent,
             sequence_stride=sequence_stride)
 
         test_inputs, = split(test_inputs, ())
@@ -160,7 +160,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
 
         test_inputs, test_targets, test_lengths = load_data(
             ['P<', 'P>', 'b>'],
-            recurrent=False,
+            recurrent=recurrent,
             sequence_stride=sequence_stride)
 
         test_inputs, = split(test_inputs, ())
@@ -193,7 +193,7 @@ def get_scenario(scenario, recurrent=False, sequence_stride=10):
 
         test_inputs, test_targets, test_lengths = load_data(
             ['P<', 'P>', 'b>'],
-            recurrent=False,
+            recurrent=recurrent,
             sequence_stride=sequence_stride)
 
         test_inputs, = split(test_inputs, ())
