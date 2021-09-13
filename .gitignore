@@ -1,8 +1,11 @@
 # Custom
-data/
-outputs/
-weights/
-results/
+**/data/
+**/outputs/
+**/weights/
+**/results/
+
+**/up.sh
+**/down.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
