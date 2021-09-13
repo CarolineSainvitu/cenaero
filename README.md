@@ -28,5 +28,8 @@ SCENARIO` and `python3 rnn.py NAME SCENARIO` respectively.
 
 This [short report](./milestone-1/short-report.pdf) formally describes the
 problem and the methods, and displays the results of the different methods.
-This [more extensive report](./milestonee-1/long-report.pdf) explains in more
+This [more extensive report](./milestone-1/long-report.pdf) explains in more
 details the early stages of the work (not up to date).
+
+The results and training procedure can also be visualized in
+[milestone-1/example.ipynb](milestone-1/example.ipynb).
